@@ -530,6 +530,30 @@ export function createModelCard(model, modelType) {
     return card;
 }
 
+const LOAD_DELAY = 200; // ms delay between loading videos
+const videoQueue = new Set();
+let isProcessingQueue = false;
+
+async function processVideoQueue() {
+    if (isProcessingQueue) {
+        return;
+    }
+    isProcessingQueue = true;
+
+    while (videoQueue.size > 0) {
+        const videoToLoad = videoQueue.values().next().value;
+        videoQueue.delete(videoToLoad);
+
+        if (videoToLoad) {
+            loadVideoSource(videoToLoad);
+            // Wait for a delay before processing the next video
+            await new Promise((resolve) => setTimeout(resolve, LOAD_DELAY));
+      }
+    }
+
+    isProcessingQueue = false;
+}
+
 const VIDEO_LAZY_ROOT_MARGIN = '200px 0px';
 let videoLazyObserver = null;
 
@@ -539,20 +563,25 @@ function ensureVideoLazyObserver() {
     }
 
     videoLazyObserver = new IntersectionObserver((entries, observer) => {
-        entries.forEach(entry => {
+        entries.forEach((entry) => {
+            const target = entry.target;
             if (entry.isIntersecting) {
-                const target = entry.target;
-                observer.unobserve(target);
-                loadVideoSource(target);
+                videoQueue.add(target);
+                if (!isProcessingQueue) {
+                    processVideoQueue();
+                }
+            } else {
+                // If a video goes out of view, remove it from the queue if it hasn't been loaded yet
+                videoQueue.delete(target);
             }
         });
-    }, {
-        root: null,
-        rootMargin: VIDEO_LAZY_ROOT_MARGIN,
-        threshold: 0.01
-    });
+      }, {
+          root: null,
+          rootMargin: VIDEO_LAZY_ROOT_MARGIN,
+          threshold: 0.01
+      });
 
-    return videoLazyObserver;
+  return videoLazyObserver;
 }
 
 function cleanupHoverHandlers(videoElement) {
@@ -578,6 +607,11 @@ function requestSafePlay(videoElement) {
 function loadVideoSource(videoElement) {
     if (!videoElement || videoElement.dataset.loaded === 'true') {
         return;
+    }
+
+    // Unobserve the target as it's now being loaded
+    if (videoLazyObserver) {
+        videoLazyObserver.unobserve(videoElement);
     }
 
     const sourceElement = videoElement.querySelector('source');
@@ -656,7 +690,9 @@ export function configureModelCardVideo(videoElement, autoplayOnHover) {
         const cardPreview = videoElement.closest('.card-preview');
         if (cardPreview) {
             const mouseEnter = () => {
-                loadVideoSource(videoElement);
+                if (videoElement.dataset.loaded !== "true") {
+                    loadVideoSource(videoElement);
+                }
                 requestSafePlay(videoElement);
             };
             const mouseLeave = () => {
