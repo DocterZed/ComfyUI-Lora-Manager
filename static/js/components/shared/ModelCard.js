@@ -575,13 +575,13 @@ function ensureVideoLazyObserver() {
                 videoQueue.delete(target);
             }
         });
-      }, {
-          root: null,
-          rootMargin: VIDEO_LAZY_ROOT_MARGIN,
-          threshold: 0.01
-      });
+    }, {
+        root: null,
+        rootMargin: VIDEO_LAZY_ROOT_MARGIN,
+        threshold: 0.01
+    });
 
-  return videoLazyObserver;
+    return videoLazyObserver;
 }
 
 function cleanupHoverHandlers(videoElement) {
